@@ -1,0 +1,3 @@
+# Theoretically the package should work with any version of TensorFlow 2.x
+# However, it was tested only on TensorFlow 2.18.1
+tensorflow==2.18.1
