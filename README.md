@@ -9,7 +9,7 @@ For instance, processing two batches of point clouds with dimensions of `32*8192
 
 ## The Solution
 
-This package bypasses these limitations by using a custom CUDA kernel to compute minimum distances and their corresponding indices. By optimizing the calculation at the kernel level, we avoid the massive memory overhead of explicit distance matrices.
+This package bypasses these limitations by using a custom CUDA kernel to compute minimum distances and their corresponding indices.
 ### Installation & Usage
 
 1) Compile the kernels: Run the provided compilation script:
