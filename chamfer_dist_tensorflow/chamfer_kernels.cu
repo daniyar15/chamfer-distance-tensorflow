@@ -1,5 +1,5 @@
 /*
- * chamfer_kernels.cu.cc
+ * chamfer_kernels.cu
  */
 #define GOOGLE_CUDA 1
 #define EIGEN_USE_GPU
@@ -8,7 +8,7 @@
 #include <cuda_runtime.h>
 
 // ------------------------------------------------------------------
-// Original Kernel Definitions
+//  Kernel Definitions
 // ------------------------------------------------------------------
 
 __global__ void chamfer_dist_kernel(int batch_size, int n, const float* xyz1,
@@ -173,7 +173,6 @@ void ChamferDistKernelLauncher(int b, int n, const float* xyz1,
                                float* dist1, int* idx1,
                                float* dist2, int* idx2,
                                const Eigen::GpuDevice& d) {
-  // Original PyTorch dim: dim3(32, 16, 1), 512
   chamfer_dist_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, dist1, idx1);
   
@@ -194,7 +193,6 @@ void ChamferDistGradKernelLauncher(int b, int n, const float* xyz1,
   cudaMemsetAsync(grad_xyz1, 0, b * n * 3 * sizeof(float), d.stream());
   cudaMemsetAsync(grad_xyz2, 0, b * m * 3 * sizeof(float), d.stream());
 
-  // Original PyTorch dim: dim3(1, 16, 1), 256
   chamfer_dist_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, grad_dist1, idx1, grad_xyz1, grad_xyz2);
       
