@@ -1,5 +1,5 @@
 import tensorflow as tf
-from chamfer_dist import chamfer_dist
+from chamfer_dist_tensorflow import compute_distances
 
 def calculate_chamfer_distances(pc1, pc2):
     """
@@ -72,27 +72,26 @@ def main():
     xyz1 = tf.convert_to_tensor(xyz1, dtype=tf.float32)
     xyz2 = tf.convert_to_tensor(xyz2, dtype=tf.float32)
     
-    with tf.GradientTape() as tape:
-        tape.watch(xyz1)
-        dist1, dist2, idx1, idx2 = chamfer_dist(xyz1, xyz2)
+    with tf.GradientTape() as tape1:
+        tape1.watch(xyz1)
+        dist1, dist2, idx1, idx2 = compute_distances(xyz1, xyz2)
         print(f"dist1 shape: {dist1.shape}, dist2 shape: {dist2.shape}")
-        loss = tf.reduce_mean(dist1, axis=1) + tf.reduce_mean(dist2, axis=1)
-        loss = tf.reduce_mean(loss)
-    print("Loss: ", loss.numpy())
-    grad = tape.gradient(loss, xyz1)
-    print(f"Gradient shape: {grad.shape}")
+        loss1 = tf.reduce_mean(dist1, axis=1) + tf.reduce_mean(dist2, axis=1)
+        loss1 = tf.reduce_mean(loss1)
+    print("Chamfer Distance loss: ", loss1.numpy())
+    grad1 = tape1.gradient(loss1, xyz1)
+    print(f"Gradient shape: {grad1.shape}")
 
     with tf.GradientTape() as tape2:
         tape2.watch(xyz1)
         chamfer_distance = calculate_chamfer_distances(xyz1, xyz2)
-        print(f"Chamfer dist shape: {chamfer_distance.shape}")
         loss2 = tf.reduce_mean(chamfer_distance)
-    print("Loss2: ", loss2.numpy())
+    print("Chamfer Distance loss (reference implementation): ", loss2.numpy())
     grad2 = tape2.gradient(loss2, xyz1)
-    print(f"Gradient2 shape: {grad2.shape}")
-    print("Loss difference: ", abs(loss.numpy() - loss2.numpy()))
-    print("Max difference in gradients: ", tf.reduce_max(tf.abs(grad - grad2)).numpy())
-    print("Mean difference in gradients: ", tf.reduce_mean(tf.abs(grad - grad2)).numpy())
+    print(f"Gradient shape: {grad2.shape}")
+    print("Loss difference: ", abs(loss1.numpy() - loss2.numpy()))
+    print("Max difference in gradients: ", tf.reduce_max(tf.abs(grad1 - grad2)).numpy())
+    print("Mean difference in gradients: ", tf.reduce_mean(tf.abs(grad1 - grad2)).numpy())
 
 
 if __name__ == '__main__':

@@ -1,0 +1,10 @@
+[project]
+name = "chamfer-distance-tensorflow"
+version = "0.1.0"
+authors = [
+  { name="Daniyar Kazbek", email="daniyar1509@gmail.com" },
+]
+
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["tensorflow>=2.18.0"]
