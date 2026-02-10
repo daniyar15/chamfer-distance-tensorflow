@@ -17,7 +17,12 @@ This package bypasses these limitations by using a custom CUDA kernel to compute
 ./chamfer_dist_tensorflow/compile.sh
 ```
 
-2) Testing: Refer to test.py for example usage and verification. Running the script will:
+2) Install the package:
+```
+pip install .
+```
+
+3) Testing: Refer to `test.py` for example usage and verification. Running the script will:
 
     - Compute the Chamfer distance between two batches of random point clouds.
     - Calculate gradients.
