@@ -12,6 +12,8 @@ def compute_distances(
     xyz1: tf.Tensor, xyz2: tf.Tensor
 ) -> tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
     """
+    Computes the minimum L2 distances between points in two point clouds.
+
     Args:
         xyz1: (B, N, 3)
         xyz2: (B, M, 3)
