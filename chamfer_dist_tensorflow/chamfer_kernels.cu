@@ -199,3 +199,203 @@ void ChamferDistGradKernelLauncher(int b, int n, const float* xyz1,
   chamfer_dist_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, m, xyz2, n, xyz1, grad_dist2, idx2, grad_xyz2, grad_xyz1);
 }
+
+
+// ------------------------------------------------------------------
+// L1 Distance Kernel Definitions
+// ------------------------------------------------------------------
+
+__global__ void chamfer_dist_l1_kernel(int batch_size, int n, const float* xyz1,
+                                       int m, const float* xyz2, float* dist,
+                                       int* indexes) {
+  const int batch = 512;
+  __shared__ float buf[batch * 3];
+  for (int i = blockIdx.x; i < batch_size; i += gridDim.x) {
+    for (int k2 = 0; k2 < m; k2 += batch) {
+      int end_k = min(m, k2 + batch) - k2;
+      for (int j = threadIdx.x; j < end_k * 3; j += blockDim.x) {
+        buf[j] = xyz2[(i * m + k2) * 3 + j];
+      }
+      __syncthreads();
+      for (int j = threadIdx.x + blockIdx.y * blockDim.x; j < n;
+           j += blockDim.x * gridDim.y) {
+        float x1 = xyz1[(i * n + j) * 3 + 0];
+        float y1 = xyz1[(i * n + j) * 3 + 1];
+        float z1 = xyz1[(i * n + j) * 3 + 2];
+        float best_dist = 0;
+        int best_dist_index = 0;
+        int end_ka = end_k - (end_k & 3);
+        if (end_ka == batch) {
+          for (int k = 0; k < batch; k += 4) {
+            {
+              float x2 = buf[k * 3 + 0];
+              float y2 = buf[k * 3 + 1];
+              float z2 = buf[k * 3 + 2];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (k == 0 || dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 3];
+              float y2 = buf[k * 3 + 4];
+              float z2 = buf[k * 3 + 5];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 1;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 6];
+              float y2 = buf[k * 3 + 7];
+              float z2 = buf[k * 3 + 8];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 2;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 9];
+              float y2 = buf[k * 3 + 10];
+              float z2 = buf[k * 3 + 11];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 3;
+              }
+            }
+          }
+        } else {
+          for (int k = 0; k < end_ka; k += 4) {
+            {
+              float x2 = buf[k * 3 + 0];
+              float y2 = buf[k * 3 + 1];
+              float z2 = buf[k * 3 + 2];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (k == 0 || dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 3];
+              float y2 = buf[k * 3 + 4];
+              float z2 = buf[k * 3 + 5];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 1;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 6];
+              float y2 = buf[k * 3 + 7];
+              float z2 = buf[k * 3 + 8];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 2;
+              }
+            }
+            {
+              float x2 = buf[k * 3 + 9];
+              float y2 = buf[k * 3 + 10];
+              float z2 = buf[k * 3 + 11];
+              float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+              if (dist < best_dist) {
+                best_dist = dist;
+                best_dist_index = k + k2 + 3;
+              }
+            }
+          }
+        }
+        for (int k = end_ka; k < end_k; k++) {
+          float x2 = buf[k * 3 + 0];
+          float y2 = buf[k * 3 + 1];
+          float z2 = buf[k * 3 + 2];
+          float dist = fabsf(x1 - x2) + fabsf(y1 - y2) + fabsf(z1 - z2);
+          if (k == 0 || dist < best_dist) {
+            best_dist = dist;
+            best_dist_index = k + k2;
+          }
+        }
+        if (k2 == 0 || dist[(i * n + j)] > best_dist) {
+          dist[(i * n + j)] = best_dist;
+          indexes[(i * n + j)] = best_dist_index;
+        }
+      }
+      __syncthreads();
+    }
+  }
+}
+
+__device__ float sign(float val) {
+  return (val > 0.0f) - (val < 0.0f);
+}
+
+__global__ void chamfer_dist_l1_grad_kernel(int b, int n, const float* xyz1, int m,
+                                            const float* xyz2,
+                                            const float* grad_dist1,
+                                            const int* idx1, float* grad_xyz1,
+                                            float* grad_xyz2) {
+  for (int i = blockIdx.x; i < b; i += gridDim.x) {
+    for (int j = threadIdx.x + blockIdx.y * blockDim.x; j < n;
+         j += blockDim.x * gridDim.y) {
+      float x1 = xyz1[(i * n + j) * 3 + 0];
+      float y1 = xyz1[(i * n + j) * 3 + 1];
+      float z1 = xyz1[(i * n + j) * 3 + 2];
+      int j2 = idx1[i * n + j];
+      float x2 = xyz2[(i * m + j2) * 3 + 0];
+      float y2 = xyz2[(i * m + j2) * 3 + 1];
+      float z2 = xyz2[(i * m + j2) * 3 + 2];
+      float g = grad_dist1[i * n + j];
+      
+      // Gradient of L1 distance: sign(x1 - x2), sign(y1 - y2), sign(z1 - z2)
+      float grad_x = g * sign(x1 - x2);
+      float grad_y = g * sign(y1 - y2);
+      float grad_z = g * sign(z1 - z2);
+      
+      atomicAdd(&(grad_xyz1[(i * n + j) * 3 + 0]), grad_x);
+      atomicAdd(&(grad_xyz1[(i * n + j) * 3 + 1]), grad_y);
+      atomicAdd(&(grad_xyz1[(i * n + j) * 3 + 2]), grad_z);
+      atomicAdd(&(grad_xyz2[(i * m + j2) * 3 + 0]), -grad_x);
+      atomicAdd(&(grad_xyz2[(i * m + j2) * 3 + 1]), -grad_y);
+      atomicAdd(&(grad_xyz2[(i * m + j2) * 3 + 2]), -grad_z);
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+// L1 TensorFlow Launchers
+// ------------------------------------------------------------------
+
+void ChamferDistL1KernelLauncher(int b, int n, const float* xyz1,
+                                 int m, const float* xyz2,
+                                 float* dist1, int* idx1,
+                                 float* dist2, int* idx2,
+                                 const Eigen::GpuDevice& d) {
+  chamfer_dist_l1_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
+      b, n, xyz1, m, xyz2, dist1, idx1);
+  
+  chamfer_dist_l1_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
+      b, m, xyz2, n, xyz1, dist2, idx2);
+}
+
+void ChamferDistL1GradKernelLauncher(int b, int n, const float* xyz1,
+                                     int m, const float* xyz2,
+                                     const float* grad_dist1, const int* idx1,
+                                     const float* grad_dist2, const int* idx2,
+                                     float* grad_xyz1, float* grad_xyz2,
+                                     const Eigen::GpuDevice& d) {
+  cudaMemsetAsync(grad_xyz1, 0, b * n * 3 * sizeof(float), d.stream());
+  cudaMemsetAsync(grad_xyz2, 0, b * m * 3 * sizeof(float), d.stream());
+
+  chamfer_dist_l1_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
+      b, n, xyz1, m, xyz2, grad_dist1, idx1, grad_xyz1, grad_xyz2);
+      
+  chamfer_dist_l1_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
+      b, m, xyz2, n, xyz1, grad_dist2, idx2, grad_xyz2, grad_xyz1);
+}

@@ -1,5 +1,5 @@
 import tensorflow as tf
-from chamfer_dist_tensorflow import compute_distances
+from chamfer_dist_tensorflow import compute_distances, compute_distances_l1
 
 def calculate_chamfer_distances(pc1, pc2):
     """
@@ -14,22 +14,10 @@ def calculate_chamfer_distances(pc1, pc2):
     Returns:
         dist: Tensor of shape [batch_size]
     """
-    pc1_sq = tf.reduce_sum(tf.square(pc1), axis=-1, keepdims=True)
-    # pc2_sq: [B, M] -> [B, 1, M] (transposed for broadcasting)
-    pc2_sq = tf.reduce_sum(tf.square(pc2), axis=-1)
-    pc2_sq = tf.expand_dims(pc2_sq, axis=1)
+    pc1_exp = tf.expand_dims(pc1, axis=2)  # [B, N, 1, 3]
+    pc2_exp = tf.expand_dims(pc2, axis=1)  # [B, 1, M, 3]
     
-    # Compute the intersection term 2*x*y using matrix multiplication
-    # [B, N, 3] @ [B, 3, M] -> [B, N, M]
-    interaction = tf.matmul(pc1, pc2, transpose_b=True)
-    
-    # Combine terms: ||x||^2 + ||y||^2 - 2*x*y
-    # This results in shape [B, N, M] directly, saving ~3x memory
-    dist_mat = pc1_sq + pc2_sq - 2 * interaction
-    
-    # Numerical stability: floating point errors can make dist slightly negative
-    # Force non-negative to avoid NaN if you later take sqrt
-    dist_mat = tf.nn.relu(dist_mat)
+    dist_mat = tf.reduce_sum(tf.square(pc1_exp - pc2_exp), axis=-1)  # [B, N, M]
 
     # 2. Compute min distance from pc1 to pc2 (Forward)
     # Find indices of the nearest neighbors in pc2 for each point in pc1
@@ -57,10 +45,41 @@ def calculate_chamfer_distances(pc1, pc2):
                     tf.reduce_mean(min_dist_2, axis=1))
     return chamfer_dist
 
+def calculate_chamfer_distances_l1(pc1, pc2):
+    """
+    Calculates the Chamfer Distance using L1 (Manhattan) distance.
+    
+    Args:
+        pc1: Tensor of shape [batch_size, N, 3]
+        pc2: Tensor of shape [batch_size, M, 3]
+        
+    Returns:
+        dist: Tensor of shape [batch_size]
+    """
+    # Compute pairwise L1 distances
+    # Expand dimensions for broadcasting
+    pc1_exp = tf.expand_dims(pc1, axis=2)  # [B, N, 1, 3]
+    pc2_exp = tf.expand_dims(pc2, axis=1)  # [B, 1, M, 3]
+    
+    # Compute L1 distance: sum of absolute differences across the last dimension
+    dist_mat = tf.reduce_sum(tf.abs(pc1_exp - pc2_exp), axis=-1)  # [B, N, M]
+
+    # Find nearest neighbors and compute mean distances as before
+    idx_1 = tf.argmin(dist_mat, axis=-1, output_type=tf.int32)
+    min_dist_1 = tf.gather(dist_mat, idx_1, axis=2, batch_dims=2)
+
+    dist_mat_t = tf.transpose(dist_mat, perm=[0, 2, 1])
+    idx_2 = tf.argmin(dist_mat_t, axis=-1, output_type=tf.int32)
+    min_dist_2 = tf.gather(dist_mat_t, idx_2, axis=2, batch_dims=2)
+
+    chamfer_dist_l1 = (tf.reduce_mean(min_dist_1, axis=1) + 
+                       tf.reduce_mean(min_dist_2, axis=1))
+    return chamfer_dist_l1
+
 def main():
     # input data
-    xyz1 = tf.random.uniform((16, 8192, 3), minval=-1, maxval=1, dtype=tf.float32)
-    xyz2 = tf.random.uniform((16, 8192, 3), minval=-1, maxval=1, dtype=tf.float32)
+    xyz1 = tf.random.uniform((8, 4096, 3), minval=-1, maxval=1, dtype=tf.float32)
+    xyz2 = tf.random.uniform((8, 4096, 3), minval=-1, maxval=1, dtype=tf.float32)
     # xyz1 = [[[0.0, 0.0, 0.0],
     #          [1.0, 0.0, 0.0],
     #          [0.0, 1.0, 0.0],
@@ -72,6 +91,7 @@ def main():
     xyz1 = tf.convert_to_tensor(xyz1, dtype=tf.float32)
     xyz2 = tf.convert_to_tensor(xyz2, dtype=tf.float32)
     
+    print("\nTesting L2 Chamfer Distance...")
     with tf.GradientTape() as tape1:
         tape1.watch(xyz1)
         dist1, dist2, idx1, idx2 = compute_distances(xyz1, xyz2)
@@ -93,6 +113,28 @@ def main():
     print("Max difference in gradients: ", tf.reduce_max(tf.abs(grad1 - grad2)).numpy())
     print("Mean difference in gradients: ", tf.reduce_mean(tf.abs(grad1 - grad2)).numpy())
 
+
+    print("\nTesting L1 Chamfer Distance...")
+    with tf.GradientTape() as tape3:
+        tape3.watch(xyz1)
+        dist1_l1, dist2_l1, idx1_l1, idx2_l1 = compute_distances_l1(xyz1, xyz2)
+        print(f"dist1_l1 shape: {dist1_l1.shape}, dist2_l1 shape: {dist2_l1.shape}")
+        loss3 = tf.reduce_mean(dist1_l1, axis=1) + tf.reduce_mean(dist2_l1, axis=1)
+        loss3 = tf.reduce_mean(loss3)
+    print("L1 Chamfer Distance loss: ", loss3.numpy())
+    grad3 = tape3.gradient(loss3, xyz1)
+    print(f"Gradient shape: {grad3.shape}")
+
+    with tf.GradientTape() as tape4:
+        tape4.watch(xyz1)
+        chamfer_distance_l1 = calculate_chamfer_distances_l1(xyz1, xyz2)
+        loss4 = tf.reduce_mean(chamfer_distance_l1)
+    print("L1 Chamfer Distance loss (reference implementation): ", loss4.numpy())
+    grad4 = tape4.gradient(loss4, xyz1)
+    print(f"Gradient shape: {grad4.shape}")
+    print("Loss difference: ", abs(loss3.numpy() - loss4.numpy()))
+    print("Max difference in gradients: ", tf.reduce_max(tf.abs(grad3 - grad4)).numpy())
+    print("Mean difference in gradients: ", tf.reduce_mean(tf.abs(grad3 - grad4)).numpy())
 
 if __name__ == '__main__':
     main()
