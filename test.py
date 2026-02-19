@@ -76,6 +76,18 @@ def calculate_chamfer_distances_l1(pc1, pc2):
                        tf.reduce_mean(min_dist_2, axis=1))
     return chamfer_dist_l1
 
+@tf.function
+def test_graph_mode_l2(xyz1, xyz2):
+    dist1, dist2, idx1, idx2 = compute_distances(xyz1, xyz2)
+    loss = tf.reduce_mean(dist1, axis=1) + tf.reduce_mean(dist2, axis=1)
+    return tf.reduce_mean(loss)
+
+@tf.function
+def test_graph_mode_l1(xyz1, xyz2):
+    dist1, dist2, idx1, idx2 = compute_distances_l1(xyz1, xyz2)
+    loss = tf.reduce_mean(dist1, axis=1) + tf.reduce_mean(dist2, axis=1)
+    return tf.reduce_mean(loss)
+
 def main():
     # input data
     xyz1 = tf.random.uniform((8, 4096, 3), minval=-1, maxval=1, dtype=tf.float32)
@@ -135,6 +147,15 @@ def main():
     print("Loss difference: ", abs(loss3.numpy() - loss4.numpy()))
     print("Max difference in gradients: ", tf.reduce_max(tf.abs(grad3 - grad4)).numpy())
     print("Mean difference in gradients: ", tf.reduce_mean(tf.abs(grad3 - grad4)).numpy())
+
+    print("\nTesting graph mode...")
+    loss = test_graph_mode_l2(xyz1, xyz2)
+    print("L2 graph mode loss: ", loss.numpy())
+
+    loss_l1 = test_graph_mode_l1(xyz1, xyz2)
+    print("L1 graph mode loss: ", loss_l1.numpy())
+
+    
 
 if __name__ == '__main__':
     main()
