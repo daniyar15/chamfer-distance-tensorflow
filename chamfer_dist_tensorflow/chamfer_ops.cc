@@ -34,11 +34,6 @@ REGISTER_OP("ChamferDist")
     .Output("idx2: int32")
     .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
         // Output shapes: dist1/idx1 are [B, N], dist2/idx2 are [B, M]
-        ::tensorflow::shape_inference::ShapeHandle batch;
-        ::tensorflow::shape_inference::ShapeHandle n_points;
-        ::tensorflow::shape_inference::ShapeHandle m_points;
-        
-        TF_RETURN_IF_ERROR(c->MakeShapeFromShapeTensor(0, &batch));
         
         // xyz1 shape is [Batch, N, 3]
         ::tensorflow::shape_inference::ShapeHandle xyz1_shape;
