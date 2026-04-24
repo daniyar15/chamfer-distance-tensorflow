@@ -10,9 +10,11 @@ TF_LFLAGS=( $(python -c 'import tensorflow as tf; print(" ".join(tf.sysconfig.ge
 
 # 2. Compile CUDA Kernels
 echo "Compiling CUDA kernels..."
+# TODO add more --gencode targets for other GPU architectures
 nvcc -c -o chamfer_kernels.cu.o chamfer_kernels.cu \
     ${TF_CFLAGS[@]} \
-    -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -w --expt-relaxed-constexpr
+    -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC -w --expt-relaxed-constexpr \
+    -gencode arch=compute_80,code=sm_80
 
 # 3. Compile and link the C++ code with the CUDA kernels
 echo "Compiling and Linking C++ Ops..."
