@@ -6,6 +6,19 @@
 
 #include "tensorflow/core/util/gpu_kernel_helper.h"
 #include <cuda_runtime.h>
+#include <cstdio>
+
+namespace {
+
+inline void LogCudaLaunchError(const char* kernel_name) {
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    std::fprintf(stderr, "%s launch failed: %s\n", kernel_name,
+                 cudaGetErrorString(err));
+  }
+}
+
+}  // namespace
 
 // ------------------------------------------------------------------
 //  Kernel Definitions
@@ -175,9 +188,11 @@ void ChamferDistKernelLauncher(int b, int n, const float* xyz1,
                                const Eigen::GpuDevice& d) {
   chamfer_dist_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, dist1, idx1);
+  LogCudaLaunchError("chamfer_dist_kernel(dist1)");
   
   chamfer_dist_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
       b, m, xyz2, n, xyz1, dist2, idx2);
+  LogCudaLaunchError("chamfer_dist_kernel(dist2)");
   
   // TensorFlow handles error checking automatically, but you can check d.stream() status
 }
@@ -195,9 +210,11 @@ void ChamferDistGradKernelLauncher(int b, int n, const float* xyz1,
 
   chamfer_dist_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, grad_dist1, idx1, grad_xyz1, grad_xyz2);
+    LogCudaLaunchError("chamfer_dist_grad_kernel(grad1)");
       
   chamfer_dist_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, m, xyz2, n, xyz1, grad_dist2, idx2, grad_xyz2, grad_xyz1);
+    LogCudaLaunchError("chamfer_dist_grad_kernel(grad2)");
 }
 
 
@@ -379,9 +396,11 @@ void ChamferDistL1KernelLauncher(int b, int n, const float* xyz1,
                                  const Eigen::GpuDevice& d) {
   chamfer_dist_l1_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, dist1, idx1);
+  LogCudaLaunchError("chamfer_dist_l1_kernel(dist1)");
   
   chamfer_dist_l1_kernel<<<dim3(32, 16, 1), 512, 0, d.stream()>>>(
       b, m, xyz2, n, xyz1, dist2, idx2);
+  LogCudaLaunchError("chamfer_dist_l1_kernel(dist2)");
 }
 
 void ChamferDistL1GradKernelLauncher(int b, int n, const float* xyz1,
@@ -395,7 +414,9 @@ void ChamferDistL1GradKernelLauncher(int b, int n, const float* xyz1,
 
   chamfer_dist_l1_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, n, xyz1, m, xyz2, grad_dist1, idx1, grad_xyz1, grad_xyz2);
+    LogCudaLaunchError("chamfer_dist_l1_grad_kernel(grad1)");
       
   chamfer_dist_l1_grad_kernel<<<dim3(1, 16, 1), 256, 0, d.stream()>>>(
       b, m, xyz2, n, xyz1, grad_dist2, idx2, grad_xyz2, grad_xyz1);
+    LogCudaLaunchError("chamfer_dist_l1_grad_kernel(grad2)");
 }
