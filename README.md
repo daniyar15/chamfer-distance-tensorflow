@@ -11,8 +11,9 @@ For instance, processing two batches of point clouds with dimensions of `32*8192
 
 This package bypasses these limitations by using a custom CUDA kernel to compute minimum distances and their corresponding indices.
 ### Installation & Usage
+0) Install [CUDA Development Toolkit](https://developer.nvidia.com/cuda-downloads) and add it to the PATH and LD_LIBRARY_PATH ([guide](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#environment-setup))
 
-1) Compile the kernels: Run the provided compilation script (CUDA Development Toolkit must be installed and added to PATH):
+1) Compile the kernels: Run the provided compilation script:
 ```
 ./chamfer_dist_tensorflow/compile.sh
 ```
