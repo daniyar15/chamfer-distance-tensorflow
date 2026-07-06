@@ -50,16 +50,24 @@ echo "[INFO] Compiling CUDA kernels..."
 # We generate SASS (cubin) for common GPU generations and embed PTX
 # (code=compute_80) so the driver can JIT-compile for future architectures.
 # Adjust or comment out lines for architectures you do not need.
-CUDA_GENCODE_FLAGS=(
-    -gencode arch=compute_60,code=sm_60   # Pascal: GTX 1080 Ti, P100, P40
-    -gencode arch=compute_70,code=sm_70   # Volta: V100, Titan V
-    -gencode arch=compute_75,code=sm_75   # Turing: RTX 2080 Ti, T4, Quadro RTX
-    -gencode arch=compute_80,code=sm_80   # Ampere: A100, A6000, RTX 3090
-    -gencode arch=compute_86,code=sm_86   # Ampere: RTX 3060/3070/3080, A40
-    -gencode arch=compute_89,code=sm_89   # Ada Lovelace: RTX 4090, L40
-    -gencode arch=compute_90,code=sm_90   # Hopper: H100, H200
-    -gencode arch=compute_80,code=compute_80  # PTX fallback for future GPUs (Blackwell+)
-)
+# Auto-detect GPU compute capability via nvidia-smi, with a fallback list.
+if command -v nvidia-smi &> /dev/null && nvidia-smi --query-gpu=compute_cap --format=csv,noheader &> /dev/null 2>&1; then
+    DETECTED_CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d '.')
+    echo "[INFO] Detected GPU compute capability: ${DETECTED_CC}"
+    CUDA_GENCODE_FLAGS=(
+        -gencode "arch=compute_${DETECTED_CC},code=sm_${DETECTED_CC}"
+    )
+else
+    echo "[INFO] Could not detect GPU. Using common architectures for CUDA 12+"
+    CUDA_GENCODE_FLAGS=(
+        -gencode arch=compute_75,code=sm_75   # Turing: RTX 2080 Ti, T4, Quadro RTX
+        -gencode arch=compute_80,code=sm_80   # Ampere: A100, A6000, RTX 3090
+        -gencode arch=compute_86,code=sm_86   # Ampere: RTX 3060/3070/3080, A40
+        -gencode arch=compute_89,code=sm_89   # Ada Lovelace: RTX 4090, L40
+        -gencode arch=compute_90,code=sm_90   # Hopper: H100, H200
+        -gencode arch=compute_80,code=compute_80  # PTX fallback
+    )
+fi
 
 nvcc -c -o chamfer_kernels.cu.o chamfer_kernels.cu \
     ${TF_CFLAGS[@]} \
