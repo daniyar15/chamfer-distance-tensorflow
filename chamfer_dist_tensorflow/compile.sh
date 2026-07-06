@@ -13,6 +13,30 @@ trap 'log_error "Compilation failed at line $LINENO with exit code $?"' ERR
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 cd "$SCRIPT_DIR"
 
+# 0.1 Auto-detect CUDA installation path.
+# Precedence: $CUDA_HOME env var → derive from nvcc location → common paths.
+if [[ -n "${CUDA_HOME:-}" ]]; then
+    CUDA_HOME="${CUDA_HOME}"
+elif command -v nvcc &> /dev/null; then
+    # nvcc is typically at $CUDA_HOME/bin/nvcc
+    CUDA_HOME=$(dirname -- "$(dirname -- "$(command -v nvcc)")")
+else
+    # Fallback: try well-known locations
+    for candidate in /usr/local/cuda /usr/local/cuda-12 /usr/local/cuda-11; do
+        if [[ -d "$candidate/lib64" ]]; then
+            CUDA_HOME="$candidate"
+            break
+        fi
+    done
+fi
+
+if [[ -z "${CUDA_HOME:-}" ]] || [[ ! -d "$CUDA_HOME/lib64" ]]; then
+    log_error "CUDA toolkit not found. Set CUDA_HOME or install CUDA."
+    exit 1
+fi
+
+echo "[INFO] Using CUDA from: $CUDA_HOME"
+
 echo "[INFO] Getting TensorFlow compile and link flags..."
 
 # 1. Get TensorFlow flags
@@ -46,7 +70,7 @@ nvcc -c -o chamfer_kernels.cu.o chamfer_kernels.cu \
 echo "[INFO] Compiling and Linking C++ Ops..."
 g++ -std=c++14 -shared -o chamfer_plugin.so chamfer_ops.cc chamfer_kernels.cu.o \
     ${TF_CFLAGS[@]} -fPIC \
-    -L/usr/local/cuda/lib64 -L/usr/local/cuda-12.8/lib64 \
+    -L"$CUDA_HOME/lib64" \
     -lcudart ${TF_LFLAGS[@]} -O2 -w
 
 # 4. Verify the output was created
