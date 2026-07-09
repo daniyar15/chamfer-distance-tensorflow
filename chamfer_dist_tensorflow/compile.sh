@@ -13,14 +13,45 @@ trap 'log_error "Compilation failed at line $LINENO with exit code $?"' ERR
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 cd "$SCRIPT_DIR"
 
-# 0.1 Auto-detect CUDA installation path.
-# Precedence: $CUDA_HOME env var → derive from nvcc location → common paths.
+# 0.1 Determine TensorFlow's build-time CUDA version and auto-detect a matching
+#     CUDA installation. Critical: the custom op must link against the same CUDA
+#     runtime that TensorFlow was built with, otherwise runtime crashes like
+#     "munmap_chunk(): invalid pointer" will occur.
+# Precedence:
+#   1. $CUDA_HOME env var (explicit user override)
+#   2. A CUDA installation matching TF's build-time CUDA version
+#   3. Derive from nvcc location
+#   4. Well-known fallback paths
+echo "[INFO] Getting TensorFlow build info..."
+TF_CUDA_VER=$(python -c "
+import tensorflow as tf
+try:
+    print(tf.sysconfig.get_build_info().get('cuda_version', ''))
+except Exception:
+    print('')
+" 2>/dev/null || true)
+
 if [[ -n "${CUDA_HOME:-}" ]]; then
+    # User override — trust it
     CUDA_HOME="${CUDA_HOME}"
-elif command -v nvcc &> /dev/null; then
+elif [[ -n "$TF_CUDA_VER" ]]; then
+    # Look for a CUDA installation matching TF's version
+    TF_CUDA_MAJOR="${TF_CUDA_VER%%.*}"
+    for candidate in "/usr/local/cuda-${TF_CUDA_VER}" "/usr/local/cuda-${TF_CUDA_MAJOR}"; do
+        if [[ -d "$candidate/lib64" ]]; then
+            CUDA_HOME="$candidate"
+            echo "[INFO] Found CUDA $TF_CUDA_VER (matching TensorFlow) at: $CUDA_HOME"
+            break
+        fi
+    done
+fi
+
+if [[ -z "${CUDA_HOME:-}" ]] && command -v nvcc &> /dev/null; then
     # nvcc is typically at $CUDA_HOME/bin/nvcc
     CUDA_HOME=$(dirname -- "$(dirname -- "$(command -v nvcc)")")
-else
+fi
+
+if [[ -z "${CUDA_HOME:-}" ]]; then
     # Fallback: try well-known locations
     for candidate in /usr/local/cuda /usr/local/cuda-12 /usr/local/cuda-11; do
         if [[ -d "$candidate/lib64" ]]; then
@@ -76,7 +107,7 @@ nvcc -c -o chamfer_kernels.cu.o chamfer_kernels.cu \
 
 # 3. Compile and link the C++ code with the CUDA kernels
 echo "[INFO] Compiling and Linking C++ Ops..."
-g++ -std=c++14 -shared -o chamfer_plugin.so chamfer_ops.cc chamfer_kernels.cu.o \
+g++ -shared -o chamfer_plugin.so chamfer_ops.cc chamfer_kernels.cu.o \
     ${TF_CFLAGS[@]} -fPIC \
     -L"$CUDA_HOME/lib64" \
     -lcudart ${TF_LFLAGS[@]} -O2 -w
