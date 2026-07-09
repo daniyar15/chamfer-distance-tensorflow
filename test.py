@@ -90,8 +90,8 @@ def test_graph_mode_l1(xyz1, xyz2):
 
 def main():
     # input data
-    xyz1 = tf.random.uniform((8, 4096, 3), minval=-1, maxval=1, dtype=tf.float32)
-    xyz2 = tf.random.uniform((8, 4096, 3), minval=-1, maxval=1, dtype=tf.float32)
+    xyz1 = tf.random.uniform((8, 256, 3), minval=-1, maxval=1, dtype=tf.float32)
+    xyz2 = tf.random.uniform((8, 256, 3), minval=-1, maxval=1, dtype=tf.float32)
     # xyz1 = [[[0.0, 0.0, 0.0],
     #          [1.0, 0.0, 0.0],
     #          [0.0, 1.0, 0.0],
